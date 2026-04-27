@@ -1,5 +1,6 @@
 export const TOKEN_TRANSACTION_TYPES = {
   signUpBonus: 'SIGN_UP_BONUS',
+  emailReplyBonus: 'EMAIL_REPLY_BONUS',
   adminAdjustment: 'ADMIN_ADJUSTMENT',
   projectCreation: 'PROJECT_CREATION',
   scriptRevision: 'SCRIPT_REVISION',
@@ -14,6 +15,7 @@ export type TokenTransactionType = typeof TOKEN_TRANSACTION_TYPES[keyof typeof T
 
 export const TOKEN_COSTS = {
   signUpBonus: 90,
+  emailReplyBonus: 30,
   perSecondProject: 1,
   minimumProjectSeconds: 30,
   actions: {

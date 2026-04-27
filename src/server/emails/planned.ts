@@ -4,13 +4,16 @@ import { readFile } from 'node:fs/promises';
 import { prisma } from '@/server/db';
 import { config } from '@/server/config';
 import { getResendClient } from '@/server/emails/resend';
+import { TOKEN_COSTS } from '@/shared/constants/token-costs';
 
-const EMAIL_KIND_WELCOME = 'welcome_v1';
-const EMAIL_KIND_FOLLOW_UP_24H = 'follow_up_24h_v1';
+export const EMAIL_KIND_WELCOME = 'welcome_v1';
+export const EMAIL_KIND_FOLLOW_UP_24H = 'follow_up_24h_v1';
+export const EMAIL_KIND_REPLY_BONUS_CONFIRMED = 'reply_bonus_confirmed_v1';
 
 const DEFAULT_EMAIL_LANGUAGE = 'en';
 const EMAIL_TEMPLATE_ROOT = path.join(process.cwd(), 'email');
 const TEMPLATE_VARIABLE_PATTERN = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+const REPLY_BONUS_ALIAS_PREFIX = 'reply-bonus';
 
 const MAX_ATTEMPTS = 8;
 const DEFAULT_PROCESS_LIMIT = 50;
@@ -20,6 +23,10 @@ type SendResult = {
   ok: boolean;
   id?: string;
   error?: string;
+};
+
+export type LocalizedEmailSendResult = SendResult & {
+  language?: string;
 };
 
 type ParsedEmailTemplate = {
@@ -51,9 +58,10 @@ export type ProcessPlannedEmailsResult = {
   skipped: number;
 };
 
-function normalizeEmail(email?: string | null): string | null {
+export function normalizeEmail(email?: string | null): string | null {
   if (!email) return null;
-  const normalized = email.trim().toLowerCase();
+  const trimmed = email.trim().toLowerCase();
+  const normalized = trimmed.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1] ?? trimmed.replace(/^mailto:/, '');
   if (!normalized.includes('@')) return null;
   if (normalized.endsWith('@guest.yumcut')) return null;
   if (normalized.length > 320) return null;
@@ -181,7 +189,61 @@ async function resolveTargetLanguageForUser(userId: string, languageHint?: strin
   return normalizeLanguage(user?.preferredLanguage);
 }
 
-async function sendPlainTextEmail(params: { to: string; subject: string; text: string }): Promise<SendResult> {
+function parseConfiguredFromEmailAddress() {
+  return normalizeEmail(config.RESEND_FROM_EMAIL?.trim() ?? null);
+}
+
+function getReplyBonusSigningSecret() {
+  return config.NEXTAUTH_SECRET?.trim() || config.RESEND_WEBHOOK_SECRET?.trim() || null;
+}
+
+export function buildReplyBonusReplyToAddress(userId: string): string | null {
+  const fromEmail = parseConfiguredFromEmailAddress();
+  const secret = getReplyBonusSigningSecret();
+  if (!fromEmail || !secret) return null;
+
+  const domain = fromEmail.split('@')[1];
+  if (!domain) return null;
+
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(userId)
+    .digest('hex')
+    .slice(0, 16);
+
+  return `${REPLY_BONUS_ALIAS_PREFIX}+${userId}.${signature}@${domain}`;
+}
+
+export function parseReplyBonusReplyToAddress(addresses: string[]): { userId: string } | null {
+  const secret = getReplyBonusSigningSecret();
+  if (!secret) return null;
+
+  for (const raw of addresses) {
+    const normalized = normalizeEmail(raw);
+    if (!normalized) continue;
+
+    const localPart = normalized.split('@')[0] ?? '';
+    const match = localPart.match(/^reply-bonus\+([a-f0-9-]{36})\.([a-f0-9]{16})$/i);
+    if (!match) continue;
+
+    const userId = match[1];
+    const signature = match[2]?.toLowerCase();
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(userId)
+      .digest('hex')
+      .slice(0, 16)
+      .toLowerCase();
+
+    if (signature === expectedSignature) {
+      return { userId };
+    }
+  }
+
+  return null;
+}
+
+async function sendPlainTextEmail(params: { to: string; subject: string; text: string; replyTo?: string | null }): Promise<SendResult> {
   const from = config.RESEND_FROM_EMAIL?.trim();
   if (!from) {
     return {
@@ -195,6 +257,7 @@ async function sendPlainTextEmail(params: { to: string; subject: string; text: s
     const response = await resend.emails.send({
       from,
       to: [params.to],
+      ...(params.replyTo ? { replyTo: [params.replyTo] } : {}),
       subject: params.subject,
       text: params.text,
     });
@@ -210,6 +273,56 @@ async function sendPlainTextEmail(params: { to: string; subject: string; text: s
     return {
       ok: true,
       id: (response as any)?.data?.id,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: stringifyError(error),
+    };
+  }
+}
+
+function makeTemplateVariables(params: {
+  name?: string | null;
+  language: string;
+  extra?: Record<string, string>;
+}) {
+  const greetingName = pickGreetingName(params.name, params.language);
+  return {
+    name: greetingName,
+    bonus_tokens: String(TOKEN_COSTS.emailReplyBonus),
+    ...(params.extra ?? {}),
+  };
+}
+
+export async function sendLocalizedPlainTextEmail(params: {
+  to: string;
+  kind: string;
+  languageHint?: string | null;
+  name?: string | null;
+  replyTo?: string | null;
+  variables?: Record<string, string>;
+}): Promise<LocalizedEmailSendResult> {
+  const languageHint = parseLanguage(params.languageHint) ?? DEFAULT_EMAIL_LANGUAGE;
+
+  try {
+    const template = await loadLocalizedTemplate(params.kind, languageHint);
+    const variables = makeTemplateVariables({
+      name: params.name,
+      language: template.language,
+      extra: params.variables,
+    });
+
+    const sendResult = await sendPlainTextEmail({
+      to: params.to,
+      subject: fillTemplate(template.subjectTemplate, variables),
+      text: fillTemplate(template.textTemplate, variables),
+      replyTo: params.replyTo,
+    });
+
+    return {
+      ...sendResult,
+      language: template.language,
     };
   } catch (error) {
     return {
@@ -294,6 +407,7 @@ export async function processPlannedEmails(options: ProcessPlannedEmailsOptions 
     if (due.length === 0) {
       return [] as Array<{
         id: string;
+        userId: string;
         email: string;
         kind: string;
         attempts: number;
@@ -323,6 +437,7 @@ export async function processPlannedEmails(options: ProcessPlannedEmailsOptions 
       where: { lockId, status: 'pending' },
       select: {
         id: true,
+        userId: true,
         email: true,
         kind: true,
         attempts: true,
@@ -360,16 +475,19 @@ export async function processPlannedEmails(options: ProcessPlannedEmailsOptions 
     let sendResult: SendResult;
 
     try {
-      const template = await loadLocalizedTemplate(planned.kind, languageHint);
-      resolvedLanguage = template.language;
-      const greetingName = pickGreetingName(planned.user?.name, resolvedLanguage);
-      const subject = fillTemplate(template.subjectTemplate, { name: greetingName });
-      const text = fillTemplate(template.textTemplate, { name: greetingName });
-      sendResult = await sendPlainTextEmail({
+      const replyTo = planned.kind === EMAIL_KIND_WELCOME || planned.kind === EMAIL_KIND_FOLLOW_UP_24H
+        ? buildReplyBonusReplyToAddress(planned.userId)
+        : null;
+
+      const localizedResult = await sendLocalizedPlainTextEmail({
         to: planned.email,
-        subject,
-        text,
+        kind: planned.kind,
+        languageHint,
+        name: planned.user?.name,
+        replyTo,
       });
+      resolvedLanguage = localizedResult.language ?? resolvedLanguage;
+      sendResult = localizedResult;
     } catch (error) {
       sendResult = {
         ok: false,

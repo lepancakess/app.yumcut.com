@@ -21,6 +21,7 @@ vi.mock('@/server/db', () => ({
 vi.mock('@/server/config', () => ({
   config: {
     RESEND_FROM_EMAIL: 'YumCut <hello@app.yumcut.com>',
+    NEXTAUTH_SECRET: 'test-secret-for-reply-bonus',
   },
 }));
 
@@ -32,10 +33,16 @@ vi.mock('@/server/emails/resend', () => ({
   }),
 }));
 
-import { queueUserOnboardingEmails, processPlannedEmails } from '@/server/emails/planned';
+import {
+  buildReplyBonusReplyToAddress,
+  parseReplyBonusReplyToAddress,
+  processPlannedEmails,
+  queueUserOnboardingEmails,
+} from '@/server/emails/planned';
 
 function mockClaimedEmails(claimed: Array<{
   id: string;
+  userId: string;
   email: string;
   kind: string;
   attempts: number;
@@ -88,10 +95,19 @@ describe('planned emails localization', () => {
     );
   });
 
+  it('builds and verifies signed reply bonus aliases', () => {
+    const userId = '11111111-1111-1111-1111-111111111111';
+    const alias = buildReplyBonusReplyToAddress(userId);
+    expect(alias).toMatch(/^reply-bonus\+11111111-1111-1111-1111-111111111111\.[a-f0-9]{16}@app\.yumcut\.com$/);
+    expect(parseReplyBonusReplyToAddress([alias!])).toEqual({ userId });
+    expect(parseReplyBonusReplyToAddress(['reply-bonus+11111111-1111-1111-1111-111111111111.deadbeefdeadbeef@app.yumcut.com'])).toBeNull();
+  });
+
   it('uses russian template when user language is ru before send', async () => {
     mockClaimedEmails([
       {
         id: 'planned-1',
+        userId: 'user-1',
         email: 'user@example.com',
         kind: 'welcome_v1',
         attempts: 0,
@@ -116,6 +132,7 @@ describe('planned emails localization', () => {
       expect.objectContaining({
         subject: 'личное сообщение для Иван',
         text: expect.stringContaining('здравствуйте, Иван!'),
+        replyTo: [expect.stringMatching(/^reply-bonus\+user-1\.[a-f0-9]{16}@app\.yumcut\.com$/)],
       }),
     );
 
@@ -133,6 +150,7 @@ describe('planned emails localization', () => {
     mockClaimedEmails([
       {
         id: 'planned-2',
+        userId: 'user-2',
         email: 'user@example.com',
         kind: 'welcome_v1',
         attempts: 0,
@@ -146,7 +164,7 @@ describe('planned emails localization', () => {
     expect(resendSendMock).toHaveBeenCalledWith(
       expect.objectContaining({
         subject: 'personal message for Max',
-        text: expect.stringContaining('hey Max,'),
+        text: expect.stringMatching(/hey Max,[\s\S]*30 tokens/i),
       }),
     );
 
