@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
     findUnique: vi.fn(),
   },
   plannedEmail: {
+    count: vi.fn(),
     createMany: vi.fn(),
     updateMany: vi.fn(),
   },
@@ -59,6 +60,9 @@ describe('planned emails localization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.user.findUnique.mockResolvedValue({ preferredLanguage: 'en' });
+    prismaMock.plannedEmail.count
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(1);
     prismaMock.plannedEmail.createMany.mockResolvedValue({ count: 2 });
     prismaMock.plannedEmail.updateMany.mockResolvedValue({ count: 1 });
     resendSendMock.mockResolvedValue({ data: { id: 're_test_1' } });
@@ -99,6 +103,8 @@ describe('planned emails localization', () => {
     const result = await processPlannedEmails({ limit: 10 });
 
     expect(result).toEqual({
+      plannedDue: 1,
+      plannedPending: 1,
       claimed: 1,
       sent: 1,
       rescheduled: 0,
@@ -108,8 +114,8 @@ describe('planned emails localization', () => {
 
     expect(resendSendMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        subject: 'Добро пожаловать в YumCut',
-        text: expect.stringContaining('Привет, Иван!'),
+        subject: 'личное сообщение для Иван',
+        text: expect.stringContaining('здравствуйте, Иван!'),
       }),
     );
 
@@ -139,8 +145,8 @@ describe('planned emails localization', () => {
 
     expect(resendSendMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        subject: 'Welcome to YumCut',
-        text: expect.stringContaining('Hey Max,'),
+        subject: 'personal message for Max',
+        text: expect.stringContaining('hey Max,'),
       }),
     );
 

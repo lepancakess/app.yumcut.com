@@ -42,6 +42,8 @@ export type ProcessPlannedEmailsOptions = {
 };
 
 export type ProcessPlannedEmailsResult = {
+  plannedDue: number;
+  plannedPending: number;
   claimed: number;
   sent: number;
   rescheduled: number;
@@ -258,13 +260,24 @@ export async function processPlannedEmails(options: ProcessPlannedEmailsOptions 
   const now = new Date();
   const staleBefore = new Date(now.getTime() - lockStaleMinutes * 60 * 1000);
   const lockId = crypto.randomUUID();
+  const basePendingWhere = {
+    status: 'pending' as const,
+    ...(options.userId ? { userId: options.userId } : {}),
+  };
+  const duePendingWhere = {
+    ...basePendingWhere,
+    scheduledAt: { lte: now },
+  };
+
+  const [plannedPending, plannedDue] = await Promise.all([
+    prisma.plannedEmail.count({ where: basePendingWhere }),
+    prisma.plannedEmail.count({ where: duePendingWhere }),
+  ]);
 
   const claimed = await prisma.$transaction(async (tx) => {
     const due = await tx.plannedEmail.findMany({
       where: {
-        status: 'pending',
-        scheduledAt: { lte: now },
-        ...(options.userId ? { userId: options.userId } : {}),
+        ...duePendingWhere,
         OR: [
           { lockedAt: null },
           { lockedAt: { lt: staleBefore } },
@@ -329,6 +342,8 @@ export async function processPlannedEmails(options: ProcessPlannedEmailsOptions 
   });
 
   const result: ProcessPlannedEmailsResult = {
+    plannedDue,
+    plannedPending,
     claimed: claimed.length,
     sent: 0,
     rescheduled: 0,
