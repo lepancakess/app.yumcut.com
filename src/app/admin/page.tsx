@@ -61,7 +61,7 @@ export default async function AdminHomePage() {
               <p className="text-sm text-gray-500 dark:text-gray-300">No projects yet.</p>
             ) : (
               <div className="max-h-[45vh] w-full min-w-0 overflow-auto pr-1 space-y-2">
-                {snapshot.recentProjects.map((project: { id: string; title: string; status: import('@/shared/constants/status').ProjectStatus; createdAt: string; user: { id: string; email: string; name: string | null } }) => (
+                {snapshot.recentProjects.map((project: { id: string; title: string; status: import('@/shared/constants/status').ProjectStatus; createdAt: string; tokensUsed: number; user: { id: string; email: string; name: string | null } }) => (
                   <Link
                     key={project.id}
                     href={`/admin/projects/${project.id}`}
@@ -83,6 +83,9 @@ export default async function AdminHomePage() {
                     </div>
                     <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       Created {formatDateTimeAdmin(project.createdAt)}
+                    </div>
+                    <div className="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
+                      Used {project.tokensUsed.toLocaleString()} tokens
                     </div>
                     <div className="mt-0.5 text-xs text-gray-500 break-words dark:text-gray-400">
                       {project.user.name || project.user.email}
@@ -107,13 +110,14 @@ export default async function AdminHomePage() {
               {snapshot.recentProjects.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-300">No projects yet.</p>
               ) : (
-                snapshot.recentProjects.map((project: { id: string; title: string; status: import('@/shared/constants/status').ProjectStatus; createdAt: string; user: { id: string; email: string; name: string | null } }) => (
+                snapshot.recentProjects.map((project: { id: string; title: string; status: import('@/shared/constants/status').ProjectStatus; createdAt: string; tokensUsed: number; user: { id: string; email: string; name: string | null } }) => (
                   <AdminProjectCardMobile
                     key={project.id}
                     id={project.id}
                     title={project.title}
                     status={project.status}
                     createdAtLabel={formatDateTimeAdmin(project.createdAt)}
+                    tokensUsed={project.tokensUsed}
                     userDisplay={project.user.name || project.user.email}
                   />
                 ))
@@ -125,7 +129,7 @@ export default async function AdminHomePage() {
                 <p className="text-sm text-gray-500 dark:text-gray-300">No projects yet.</p>
               ) : (
                 <div className="max-h-[45vh] w-full min-w-0 overflow-auto pr-1 space-y-3">
-                  {snapshot.recentProjects.map((project: { id: string; title: string; status: import('@/shared/constants/status').ProjectStatus; createdAt: string; user: { id: string; email: string; name: string | null } }) => (
+                  {snapshot.recentProjects.map((project: { id: string; title: string; status: import('@/shared/constants/status').ProjectStatus; createdAt: string; tokensUsed: number; user: { id: string; email: string; name: string | null } }) => (
                     <Link
                       key={project.id}
                       href={`/admin/projects/${project.id}`}
@@ -139,6 +143,9 @@ export default async function AdminHomePage() {
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         Created {formatDateTimeAdmin(project.createdAt)}
+                      </div>
+                      <div className="text-xs text-amber-700 dark:text-amber-300">
+                        Used {project.tokensUsed.toLocaleString()} tokens
                       </div>
                       <div className="truncate text-xs text-gray-500 dark:text-gray-400 break-words">
                         {project.user.name || project.user.email}

@@ -151,6 +151,9 @@ export default async function AdminUserDetailPage(props: {
                       <span className="mx-1">•</span>
                       Updated {formatDateTimeAdmin(project.updatedAt)}
                     </div>
+                    <div className="text-xs text-amber-700 dark:text-amber-300">
+                      Used {project.tokensUsed.toLocaleString()} tokens
+                    </div>
                     {project.finalVideoAvailable ? (
                       <div className="text-xs font-medium text-emerald-600 dark:text-emerald-300">Final video available</div>
                     ) : null}

@@ -1,6 +1,10 @@
 import { prisma } from '@/server/db';
 import { ProjectStatus } from '@/shared/constants/status';
-import { PROJECT_RELATED_TOKEN_TYPES, toUsedTokensFromDelta } from '@/server/admin/token-usage';
+import {
+  PROJECT_RELATED_TOKEN_TYPES,
+  extractProjectIdFromTokenMetadata,
+  toUsedTokensFromDelta,
+} from '@/server/admin/token-usage';
 
 type PaginationInput = {
   page?: number;
@@ -188,6 +192,7 @@ export interface AdminUserDetailResult {
       createdAt: string;
       updatedAt: string;
       finalVideoAvailable: boolean;
+      tokensUsed: number;
     }>;
     total: number;
     page: number;
@@ -236,7 +241,7 @@ export async function getUserDetail(userId: string, options: AdminUserDetailOpti
   const projectPage = normalizePage(options.projectPage);
   const projectSkip = (projectPage - 1) * projectTake;
 
-  const [txItems, txTotal, projectItems, projectTotal, projectTokenDelta] = await prisma.$transaction([
+  const [txItems, txTotal, projectItems, projectTotal, projectTokenRows] = await prisma.$transaction([
     prisma.tokenTransaction.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -265,14 +270,26 @@ export async function getUserDetail(userId: string, options: AdminUserDetailOpti
       },
     }),
     prisma.project.count({ where: { userId, deleted: false } }),
-    prisma.tokenTransaction.aggregate({
+    prisma.tokenTransaction.findMany({
       where: {
         userId,
         type: { in: [...PROJECT_RELATED_TOKEN_TYPES] },
       },
-      _sum: { delta: true },
+      select: {
+        delta: true,
+        metadata: true,
+      },
     }),
   ]);
+
+  const projectUsageByProjectId = new Map<string, number>();
+  let allProjectDelta = 0;
+  for (const row of projectTokenRows) {
+    allProjectDelta += row.delta;
+    const projectId = extractProjectIdFromTokenMetadata(row.metadata);
+    if (!projectId) continue;
+    projectUsageByProjectId.set(projectId, (projectUsageByProjectId.get(projectId) ?? 0) + row.delta);
+  }
 
   return {
     user: {
@@ -294,7 +311,7 @@ export async function getUserDetail(userId: string, options: AdminUserDetailOpti
           }
         : null,
     },
-    projectTokensUsed: toUsedTokensFromDelta(projectTokenDelta._sum.delta),
+    projectTokensUsed: toUsedTokensFromDelta(allProjectDelta),
     tokenHistory: {
       items: txItems.map((tx) => ({
         ...tx,
@@ -313,6 +330,7 @@ export async function getUserDetail(userId: string, options: AdminUserDetailOpti
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),
         finalVideoAvailable: Boolean(p.finalVideoUrl || p.finalVideoPath || p.videos.length > 0),
+        tokensUsed: toUsedTokensFromDelta(projectUsageByProjectId.get(p.id) ?? 0),
       })),
       total: projectTotal,
       page: projectPage,

@@ -1,6 +1,11 @@
 import { prisma } from '@/server/db';
 import { ProjectStatus } from '@/shared/constants/status';
 import { MOSCOW_TIME_ZONE } from '@/lib/date';
+import {
+  PROJECT_RELATED_TOKEN_TYPES,
+  extractProjectIdFromTokenMetadata,
+  toUsedTokensFromDelta,
+} from '@/server/admin/token-usage';
 
 const DAILY_NEW_USERS_WINDOW_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -160,6 +165,30 @@ export async function getAdminDashboardSnapshot(options?: AdminDashboardSnapshot
     count: dailyNewUsersMap.get(slot.key) ?? 0,
   }));
 
+  const recentProjectUserIds = Array.from(new Set(
+    recentProjects
+      .map((project: { user: { id: string } }) => project.user.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  ));
+  const recentProjectTokenRows = recentProjectUserIds.length > 0
+    ? await prisma.tokenTransaction.findMany({
+      where: {
+        userId: { in: recentProjectUserIds },
+        type: { in: [...PROJECT_RELATED_TOKEN_TYPES] },
+      },
+      select: {
+        delta: true,
+        metadata: true,
+      },
+    })
+    : [];
+  const usageByProjectId = new Map<string, number>();
+  for (const row of recentProjectTokenRows) {
+    const projectId = extractProjectIdFromTokenMetadata(row.metadata);
+    if (!projectId) continue;
+    usageByProjectId.set(projectId, (usageByProjectId.get(projectId) ?? 0) + row.delta);
+  }
+
   return {
     counts: {
       users: userCount,
@@ -187,6 +216,7 @@ export async function getAdminDashboardSnapshot(options?: AdminDashboardSnapshot
       title: p.title,
       status: p.status as ProjectStatus,
       createdAt: p.createdAt.toISOString(),
+      tokensUsed: toUsedTokensFromDelta(usageByProjectId.get(p.id) ?? 0),
       user: {
         id: p.user.id,
         email: p.user.email,
