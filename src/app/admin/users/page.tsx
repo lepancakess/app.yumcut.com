@@ -13,7 +13,7 @@ export default async function AdminUsersPage(props: { searchParams: Promise<Reco
   const resolved = await props.searchParams;
   const page = parsePage(resolved?.page);
   const pageSize = 20;
-  const users = await listUsers({ page, pageSize });
+  const users = await listUsers({ page, pageSize, includeDeleted: true });
 
   return (
     <div className="space-y-6">

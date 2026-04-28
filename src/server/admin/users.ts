@@ -4,6 +4,7 @@ import { ProjectStatus } from '@/shared/constants/status';
 type PaginationInput = {
   page?: number;
   pageSize?: number;
+  includeDeleted?: boolean;
 };
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -39,6 +40,7 @@ type AdminUserRow = {
   createdAt: Date;
   tokenBalance: number;
   isAdmin: boolean;
+  deleted: boolean;
 };
 
 export type AdminUserListItem = {
@@ -49,6 +51,7 @@ export type AdminUserListItem = {
   createdAt: string;
   tokenBalance: number;
   isAdmin: boolean;
+  deleted: boolean;
 };
 
 const ADMIN_USER_LIST_SELECT = {
@@ -59,6 +62,7 @@ const ADMIN_USER_LIST_SELECT = {
   createdAt: true,
   tokenBalance: true,
   isAdmin: true,
+  deleted: true,
 } as const;
 
 function serializeAdminUsers(items: AdminUserRow[]): AdminUserListItem[] {
@@ -72,15 +76,18 @@ export async function listUsers(pagination: PaginationInput = {}) {
   const take = clampPageSize(pagination.pageSize);
   const page = normalizePage(pagination.page);
   const skip = (page - 1) * take;
+  const includeDeleted = pagination.includeDeleted === true;
+  const where = includeDeleted ? undefined : { deleted: false };
 
   const [items, total] = await prisma.$transaction([
     prisma.user.findMany({
+      ...(where ? { where } : {}),
       orderBy: { createdAt: 'desc' },
       skip,
       take,
       select: ADMIN_USER_LIST_SELECT,
     }),
-    prisma.user.count(),
+    ...(where ? [prisma.user.count({ where })] : [prisma.user.count()]),
   ]);
 
   return {

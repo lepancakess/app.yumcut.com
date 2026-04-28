@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { UserX } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,7 +21,7 @@ type AdminDashboardSnapshotView = {
   };
   dailyNewUsersWindowDays: number;
   dailyNewUsers: Array<{ date: string; label: string; count: number }>;
-  recentUsers: Array<{ id: string; email: string; name: string | null; createdAt: string }>;
+  recentUsers: Array<{ id: string; email: string; name: string | null; createdAt: string; deleted: boolean }>;
 };
 
 type AdminDashboardUserMetricsSectionProps = {
@@ -41,7 +42,7 @@ export function AdminDashboardUserMetricsSection({
   );
   const userSearch = useAdminUserSearch({
     includeGuestUsers,
-    includeDeleted: false,
+    includeDeleted: true,
     limit: 20,
   });
   const visibleUsers = userSearch.isActiveQuery ? userSearch.results : snapshot.recentUsers;
@@ -136,6 +137,7 @@ export function AdminDashboardUserMetricsSection({
                     name={user.name}
                     email={user.email}
                     createdAtLabel={formatDateTimeAdmin(user.createdAt)}
+                    deleted={user.deleted}
                   />
                 ))
               )}
@@ -154,7 +156,12 @@ export function AdminDashboardUserMetricsSection({
                       className="block w-full min-w-0 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm transition hover:border-gray-300 hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-950 dark:hover:border-gray-700 dark:hover:bg-gray-900"
                     >
                       <div className="flex items-center justify-between gap-2 min-w-0">
-                        <div className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900 dark:text-gray-100">{user.name || user.email}</div>
+                        <div className="min-w-0 flex flex-1 items-start gap-2">
+                          {user.deleted ? (
+                            <UserX className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" aria-label="Deleted user" />
+                          ) : null}
+                          <div className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900 dark:text-gray-100">{user.name || user.email}</div>
+                        </div>
                         <div className="shrink-0 text-xs text-gray-500 dark:text-gray-400">{formatDateTimeAdmin(user.createdAt)}</div>
                       </div>
                       <div className="truncate text-xs text-gray-500 dark:text-gray-400 break-words">{user.email}</div>

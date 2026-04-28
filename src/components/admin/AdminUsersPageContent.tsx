@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { UserX } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +19,7 @@ type AdminUsersPageContentProps = {
       createdAt: string;
       tokenBalance: number;
       isAdmin: boolean;
+      deleted: boolean;
     }>;
     page: number;
     pageSize: number;
@@ -80,9 +82,14 @@ export function AdminUsersPageContent({ users }: AdminUsersPageContentProps) {
                 className="flex flex-col gap-2 rounded-lg border border-gray-200 px-4 py-3 transition hover:border-gray-300 hover:bg-gray-50 dark:border-gray-800 dark:hover:border-gray-700 dark:hover:bg-gray-900"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div>
+                  <div className="min-w-0 flex items-start gap-2">
+                    {user.deleted ? (
+                      <UserX className="mt-0.5 h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400" aria-label="Deleted user" />
+                    ) : null}
+                    <div className="min-w-0">
                     <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">{user.name || user.email}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="text-xs text-gray-500 dark:text-gray-400">{formatDateTimeAdmin(user.createdAt)}</div>

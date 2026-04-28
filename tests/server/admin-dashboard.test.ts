@@ -110,7 +110,7 @@ describe('getAdminDashboardSnapshot user analytics filters', () => {
     setupDefaultMockData();
   });
 
-  it('excludes deleted and @guest.yumcut users by default', async () => {
+  it('excludes guest users from recent list by default, while analytics still exclude deleted', async () => {
     await getAdminDashboardSnapshot();
 
     expect(userCount).toHaveBeenCalledWith({
@@ -122,7 +122,6 @@ describe('getAdminDashboardSnapshot user analytics filters', () => {
 
     const recentUsersQuery = userFindMany.mock.calls[0]?.[0];
     expect(recentUsersQuery.where).toEqual({
-      deleted: false,
       email: { not: { endsWith: '@guest.yumcut' } },
     });
 
@@ -134,13 +133,13 @@ describe('getAdminDashboardSnapshot user analytics filters', () => {
     expect(dailyNewUsersQuery.where.createdAt).toBeDefined();
   });
 
-  it('includes guest users but still excludes deleted users when includeGuestUsers=true', async () => {
+  it('includes guest users in recent list when includeGuestUsers=true while analytics still exclude deleted', async () => {
     await getAdminDashboardSnapshot({ includeGuestUsers: true });
 
     expect(userCount).toHaveBeenCalledWith({ where: { deleted: false } });
 
     const recentUsersQuery = userFindMany.mock.calls[0]?.[0];
-    expect(recentUsersQuery.where).toEqual({ deleted: false });
+    expect(recentUsersQuery.where).toEqual({});
 
     const dailyNewUsersQuery = userFindMany.mock.calls[1]?.[0];
     expect(dailyNewUsersQuery.where.createdAt).toBeDefined();

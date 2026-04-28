@@ -33,6 +33,9 @@ export async function getAdminDashboardSnapshot(options?: AdminDashboardSnapshot
       deleted: false,
       email: { not: { endsWith: GUEST_EMAIL_SUFFIX } },
     };
+  const recentUsersFilter = includeGuestUsers
+    ? {}
+    : { email: { not: { endsWith: GUEST_EMAIL_SUFFIX } } };
   const p = prisma as any;
   const now = new Date();
   const dailyNewUserSlots = Array.from({ length: DAILY_NEW_USERS_WINDOW_DAYS }, (_, index) => {
@@ -85,9 +88,9 @@ export async function getAdminDashboardSnapshot(options?: AdminDashboardSnapshot
     }),
     prisma.project.count({ where: { deleted: false, status: ProjectStatus.Error } }),
     prisma.user.findMany({
-      where: userAnalyticsFilter,
+      where: recentUsersFilter,
       orderBy: { createdAt: 'desc' },
-      select: { id: true, email: true, name: true, createdAt: true },
+      select: { id: true, email: true, name: true, createdAt: true, deleted: true },
       take: 5,
     }),
     prisma.user.findMany({
@@ -175,7 +178,7 @@ export async function getAdminDashboardSnapshot(options?: AdminDashboardSnapshot
     },
     dailyNewUsersWindowDays: DAILY_NEW_USERS_WINDOW_DAYS,
     dailyNewUsers,
-    recentUsers: recentUsers.map((u: { id: string; email: string; name: string | null; createdAt: Date }) => ({
+    recentUsers: recentUsers.map((u: { id: string; email: string; name: string | null; createdAt: Date; deleted: boolean }) => ({
       ...u,
       createdAt: u.createdAt.toISOString(),
     })),

@@ -10,6 +10,7 @@ export type AdminUserSearchItem = {
   createdAt: string;
   tokenBalance: number;
   isAdmin: boolean;
+  deleted: boolean;
 };
 
 type UseAdminUserSearchOptions = {

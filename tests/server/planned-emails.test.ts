@@ -134,7 +134,7 @@ describe('planned emails localization', () => {
 
     expect(resendSendMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        subject: 'личное сообщение для Иван',
+        subject: 'Иван, личное сообщение',
         text: expect.stringContaining('здравствуйте, Иван!'),
         replyTo: [expect.stringMatching(/^rb\+user-1\.[a-f0-9]{16}@app\.yumcut\.com$/)],
       }),

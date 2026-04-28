@@ -1,4 +1,4 @@
-# личное сообщение{{name_for_clause}}
+# {{name_prefix_comma}}личное сообщение
 
 здравствуйте{{name_comma_suffix}}!
 
