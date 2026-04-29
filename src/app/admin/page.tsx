@@ -65,7 +65,7 @@ export default async function AdminHomePage() {
               {recentTransactions.items.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-300">No token activity recorded.</p>
               ) : (
-                <div className="max-h-[45vh] w-full min-w-0 overflow-auto pr-1 space-y-3">
+                <div className="w-full min-w-0 space-y-3">
                   {recentTransactions.items.map((transaction) => (
                     <AdminTransactionCard key={transaction.id} transaction={transaction} />
                   ))}
